@@ -25,15 +25,13 @@ public class SQLRestaurantService {
 
 
     /**
-     *
-     *  TODO:  Implement Me
-     *
-     *  Read the schema from src/main/resources/schema.sql
-     *
-     *  Write a prepared SQL statement (with safe variable replacement) which returns all the restaurants that are open for the given DayOfWeek and LocalTime
-     *
-     *  Using the same open logic from CSVRestaurantService.getOpenRestaurants
-     *
+     * TODO:  Implement Me
+     * <p>
+     * Read the schema from src/main/resources/schema.sql
+     * <p>
+     * Write a prepared SQL statement (with safe variable replacement) which returns all the restaurants that are open for the given DayOfWeek and LocalTime
+     * <p>
+     * Using the same open logic from CSVRestaurantService.getOpenRestaurants
      */
     public List<RestaurantRecord> getOpenRestaurants(final DayOfWeek dayOfWeek, final LocalTime localTime) throws SQLException {
         final String dayOfWeekString = dayOfWeek.toString();
@@ -45,39 +43,44 @@ public class SQLRestaurantService {
         final String previousDayOfWeekString = previousDayOfWeek.toString();
 
 
-        final Integer minuteOfDay    = localTime.get(MINUTE_OF_DAY);
+        final Integer minuteOfDay = localTime.get(MINUTE_OF_DAY);
 
+        /*
+        select * from restaurants
+        where id in (
+        select restaurant_id from open_hours
+        where start_time_minute_of_day<minuteOfDay
+        and end_time_minute_of_day>minuteOfDay);
+        * */
         final String query = String.join("\n"
                 ,
-                 "select * from restaurants"
-                , ""
-                , ""
-                , ""
-                , ""
+                "select * from restaurants where id in (select restaurant_id from open_hours where day_of_week=?"
+                , "and start_time_minute_of_day<?"
+                , "and end_time_minute_of_day>?)"
         );
-
-        return runQueryAndParseRestaurants(query, dayOfWeekString, minuteOfDay);
+        return runQueryAndParseRestaurants(query, dayOfWeekString, minuteOfDay, minuteOfDay);
     }
 
     /**
-     *
-     *  TODO:  Implement Me
-     *
-     *  Read the schema from src/main/resources/schema.sql
-     *
-     *  Write a prepared SQL statement (with safe variable replacement)  which returns all the restaurants which have at least menuSize number of menu_items
-     *
+     * TODO:  Implement Me
+     * <p>
+     * Read the schema from src/main/resources/schema.sql
+     * <p>
+     * Write a prepared SQL statement (with safe variable replacement)  which returns all the restaurants which have at least menuSize number of menu_items
      */
     public List<RestaurantRecord> getRestaurantsWithMenuOfSizeGreaterThanOrEqualTo(final Integer menuSize) throws SQLException {
 
-
+    /*
+        select * from restaurants
+        where id in (
+        select restaurant_id
+        from menu_items
+        group by restaurant_id
+        having count(*)>menuSize);
+    * */
         final String query = String.join("\n"
                 ,
-                " select * from restaurants"
-                , ""
-                , ""
-                , ""
-                , ""
+                " select * from restaurants where id in (select restaurant_id from menu_items group by restaurant_id having count(*)>?)"
         );
 
         return runQueryAndParseRestaurants(query, menuSize);
@@ -94,14 +97,14 @@ public class SQLRestaurantService {
     }
 
     public void initializeDatabase() throws Exception {
-        runOnStatement(statement-> {
+        runOnStatement(statement -> {
             final String schemaSql = ResourceLoader.readResourceAsString("schema.sql");
             statement.execute(schemaSql);
             System.out.println("Done creating schema");
 
             boolean hasData = false;
             final ResultSet countRS = statement.executeQuery("select count(*) as count from restaurants");
-            while(countRS.next()) {
+            while (countRS.next()) {
                 hasData = countRS.getInt("count") > 0;
             }
 
@@ -153,36 +156,36 @@ public class SQLRestaurantService {
 
     private List<RestaurantRecord> runQueryAndParseRestaurants(final String query, final Object... parameters) throws SQLException {
         final List<RestaurantRecord> results = new ArrayList<>();
-         runOnConnection(statement-> {
+        runOnConnection(statement -> {
 
-             final PreparedStatement preparedStatement = statement.prepareStatement(query);
-             for (int i = 1; i <= parameters.length; i++) {
-                 preparedStatement.setObject(i, parameters[i-1]);
-             }
+            final PreparedStatement preparedStatement = statement.prepareStatement(query);
+            for (int i = 1; i <= parameters.length; i++) {
+                preparedStatement.setObject(i, parameters[i - 1]);
+            }
 
-             final ResultSet rs = preparedStatement.executeQuery();
-             while (rs.next()) {
-                 results.add(new RestaurantRecord(rs.getLong("id"), rs.getString("name")));
-             }
-         });
+            final ResultSet rs = preparedStatement.executeQuery();
+            while (rs.next()) {
+                results.add(new RestaurantRecord(rs.getLong("id"), rs.getString("name")));
+            }
+        });
 
-         return results;
+        return results;
     }
 
     private List<RestaurantRecord> runQueryAndParseRestaurants(final String query) throws SQLException {
         final List<RestaurantRecord> results = new ArrayList<>();
-         runOnStatement(statement-> {
+        runOnStatement(statement -> {
             final ResultSet rs = statement.executeQuery(query);
             while (rs.next()) {
                 results.add(new RestaurantRecord(rs.getLong("id"), rs.getString("name")));
             }
         });
 
-         return results;
+        return results;
     }
 
 
-   private Connection createConnection() throws SQLException {
+    private Connection createConnection() throws SQLException {
         JdbcDataSource ds = new JdbcDataSource();
         ds.setURL("jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1");
         ds.setUser("sa");
