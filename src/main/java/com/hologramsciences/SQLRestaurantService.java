@@ -49,16 +49,16 @@ public class SQLRestaurantService {
         select * from restaurants
         where id in (
         select restaurant_id from open_hours
-        where start_time_minute_of_day<minuteOfDay
+        where day_of_week =dayOfWeekString start_time_minute_of_day<minuteOfDay
         and end_time_minute_of_day>minuteOfDay);
         * */
         final String query = String.join("\n"
                 ,
-                "select * from restaurants where id in (select restaurant_id from open_hours where day_of_week=?"
-                , "and start_time_minute_of_day<?"
-                , "and end_time_minute_of_day>?)"
+                "select * from restaurants where id in (select restaurant_id from open_hours "
+                , "where (day_of_week = ? and start_time_minute_of_day < ? and end_time_minute_of_day > ?) "
+                , "or (day_of_week = ? and start_time_minute_of_day > end_time_minute_of_day and end_time_minute_of_day > ?))"
         );
-        return runQueryAndParseRestaurants(query, dayOfWeekString, minuteOfDay, minuteOfDay);
+        return runQueryAndParseRestaurants(query, dayOfWeekString, minuteOfDay, minuteOfDay, previousDayOfWeekString, minuteOfDay);
     }
 
     /**
@@ -76,11 +76,11 @@ public class SQLRestaurantService {
         select restaurant_id
         from menu_items
         group by restaurant_id
-        having count(*)>menuSize);
+        having count(*)>=menuSize);
     * */
         final String query = String.join("\n"
                 ,
-                " select * from restaurants where id in (select restaurant_id from menu_items group by restaurant_id having count(*)>?)"
+                " select * from restaurants where id in (select restaurant_id from menu_items group by restaurant_id having count(*)>=?)"
         );
 
         return runQueryAndParseRestaurants(query, menuSize);

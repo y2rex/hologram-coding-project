@@ -59,13 +59,8 @@ public class CSVRestaurantService {
             String name = r.get(0);
             String dayHourString = r.get(1);
 
-            if (ObjectUtils.isNotEmpty(dayHourString)) {
-                Map<DayOfWeek, Restaurant.OpenHours> openHours = parseOpenHour(dayHourString);
-                for (DayOfWeek day : openHours.keySet()) {
-                    Restaurant.OpenHours openHours1 = openHours.get(day);
-                    if (openHours1.getStartTime() == openHours1.getEndTime())
-                        Option.none();
-                }
+            Map<DayOfWeek, Restaurant.OpenHours> openHours = parseOpenHour(dayHourString);
+            if (openHours.size() > 0) {
                 Restaurant parsedRestaurant = new Restaurant(name, openHours);
                 return Option.some(parsedRestaurant);
             }
@@ -78,41 +73,46 @@ public class CSVRestaurantService {
      */
     public static Map<DayOfWeek, Restaurant.OpenHours> parseOpenHour(final String openhoursString) {
         Map<DayOfWeek, Restaurant.OpenHours> openHours = new HashMap<>();
-        try {
-            System.out.println("Given String :" + openhoursString + "\n");
-            List<String> res = new ArrayList<>();
-            for (String s : Arrays.asList(openhoursString.split(",")))
-                if (s.contains(";"))
-                    res.addAll(Arrays.asList(s.split(";")));
-                else
-                    res.add(s);
-            int startHour = 0, startMinute = 0;
-            int endHour = 0, endMinute = 0;
-            for (int i = res.size() - 1; i >= 0; i--) {
-                String day = res.get(i);
-                if (day.length() == 3) {
+        List<String> res = new ArrayList<>();
+        for (String s : Arrays.asList(openhoursString.split(",")))
+            if (s.contains(";"))
+                res.addAll(Arrays.asList(s.split(";")));
+            else
+                res.add(s);
+        int startHour = 0, startMinute = 0;
+        int endHour = 0, endMinute = 0;
+
+        String startTimeString = "";
+        String endTimeString = "";
+
+        for (int i = res.size() - 1; i >= 0; i--) {
+            String day = res.get(i);
+            if (day.length() == 3) {
+                if (!startTimeString.equals(endTimeString))
                     openHours.put(getDayOfWeek(day).get(), new Restaurant.OpenHours(LocalTime.of(startHour, startMinute), LocalTime.of(endHour, endMinute)));
-                } else {
-                    String[] last = day.split("\\|");
-                    String[] times = last[1].split("-");
-                    String[] start = times[0].split(":");
-                    String[] end = times[1].split(":");
+            } else {
+                String[] last = day.split("\\|");
+                String[] times = last[1].split("-");
+                String[] start = times[0].split(":");
+                String[] end = times[1].split(":");
 
-                    startHour = Integer.parseInt(start[0]);
-                    startMinute = Integer.parseInt(start[1]);
+                startHour = Integer.parseInt(start[0]);
+                startMinute = Integer.parseInt(start[1]);
+                startTimeString = start[0] + start[1];
 
-                    endHour = Integer.parseInt(end[0]);
-                    endMinute = Integer.parseInt(end[1]);
+                endHour = Integer.parseInt(end[0]);
+                endMinute = Integer.parseInt(end[1]);
+                endTimeString = end[0] + end[1];
+                if (!startTimeString.equals(endTimeString))
                     openHours.put(getDayOfWeek(last[0]).get(), new Restaurant.OpenHours(LocalTime.of(startHour, startMinute), LocalTime.of(endHour, endMinute)));
-                }
             }
-            return openHours;
-        } catch (Exception e) {
-            System.out.println(e);
         }
         return openHours;
     }
 
+    private static LocalTime parseTimeFromString(final String timeString) {
+        return LocalTime.of(Integer.parseInt(timeString.substring(0, 2)), Integer.parseInt(timeString.substring(3)));
+    }
     public CSVRestaurantService() throws IOException {
         this.restaurantList = ResourceLoader.parseOptionCSV("rest_hours.csv", CSVRestaurantService::parse);
     }
@@ -147,9 +147,19 @@ public class CSVRestaurantService {
     public List<Restaurant> getOpenRestaurants(final DayOfWeek dayOfWeek, final LocalTime localTime) {
         List<Restaurant> openRestaurants = new ArrayList<>();
         for (Restaurant restaurant : restaurantList) {
-            Restaurant.OpenHours openHours = restaurant.getOpenHoursMap().get(dayOfWeek);
-            if (localTime.isAfter(openHours.getStartTime()) && localTime.isBefore(openHours.getEndTime())) {
-                openRestaurants.add(restaurant);
+            if (restaurant.getOpenHoursMap().containsKey(dayOfWeek)) {
+                Restaurant.OpenHours openHours = restaurant.getOpenHoursMap().get(dayOfWeek);
+                if (localTime.isAfter(openHours.getStartTime()) && localTime.isBefore(openHours.getEndTime()))
+                    openRestaurants.add(restaurant);
+                else {
+                    DayOfWeek previousDay = dayOfWeek.minus(1);
+                    if (restaurant.getOpenHoursMap().containsKey(previousDay))
+                        openHours = restaurant.getOpenHoursMap().get(previousDay);
+
+                    if (openHours.spansMidnight())
+                        if ((localTime.isBefore(openHours.getEndTime())) && localTime.isBefore(LocalTime.of(5, 0)))
+                            openRestaurants.add(restaurant);
+                }
             }
         }
 
