@@ -34,6 +34,10 @@ public class Algorithms {
      *
      */
     public static final <T> List<List<T>> cartesianProductForLists(final List<List<T>> listOfLists) {
+       /*
+
+        ****iterative approach but it will not maintain sequence as per our expected output********
+
         int totalCartesianProduct = 1;
         List<List<T>> result = new ArrayList<>();
         for (List<T> list : listOfLists)
@@ -48,6 +52,26 @@ public class Algorithms {
                 index *= list.size();
             }
             result.add(l);
+        }
+        return result;
+
+        */
+
+        List<List<T>> result = new ArrayList<List<T>>();
+        if (listOfLists.size() == 0){
+            result.add(new ArrayList<>());
+            return result;
+        }
+
+        List<T> firstList = listOfLists.get(0);
+        List<List<T>> remainingList = cartesianProductForLists(listOfLists.subList(1, listOfLists.size()));
+        for (T value : firstList) {
+            for (List<T> list : remainingList) {
+                ArrayList<T> l = new ArrayList<T>();
+                l.add(value);
+                l.addAll(list);
+                result.add(l);
+            }
         }
         return result;
     }
