@@ -19,48 +19,71 @@ import org.jooq.meta.jaxb.Target;
 
 import com.hologramsciences.jooq.tables.records.RestaurantsRecord;
 
+import static com.hologramsciences.jooq.tables.MenuItems.MENU_ITEMS;
+import static com.hologramsciences.jooq.tables.OpenHours.OPEN_HOURS;
 import static com.hologramsciences.jooq.tables.Restaurants.RESTAURANTS;
 import static java.time.temporal.ChronoField.MINUTE_OF_DAY;
+
+import static org.jooq.impl.DSL.count;
 
 public class JooqRestaurantService {
 
     private final SQLRestaurantService sqlRestaurantService = new SQLRestaurantService();
 
     /**
-     *
      * TODO: Implement me
-     *
-     *  NOTE:  This method should have the same logic as SQLRestaurantService.getOpenRestaurants, but should use the Jooq SQL DSL:
-     *
-     *  https://www.jooq.org/doc/3.13/manual-single-page/#select-statement
-     *
-     *
+     * <p>
+     * NOTE:  This method should have the same logic as SQLRestaurantService.getOpenRestaurants, but should use the Jooq SQL DSL:
+     * <p>
+     * https://www.jooq.org/doc/3.13/manual-single-page/#select-statement
      */
     public List<RestaurantsRecord> getOpenRestaurants(final DayOfWeek dayOfWeek, final LocalTime localTime) throws SQLException {
         final String dayOfWeekString = dayOfWeek.toString();
-        final Integer minuteOfDay    = localTime.get(MINUTE_OF_DAY);
+        final Integer minuteOfDay = localTime.get(MINUTE_OF_DAY);
+
+        final String previousDayOfWeekString = dayOfWeek.minus(1).toString();
+        final Integer span = LocalTime.of(5, 0).get(MINUTE_OF_DAY);
 
         return withDSLContext(create -> {
             return create
-                    .selectFrom(RESTAURANTS)
-                    .fetch();
+                    .select(RESTAURANTS.ID, RESTAURANTS.NAME)
+                    .from(RESTAURANTS)
+                    .where(RESTAURANTS.ID
+                            .in(create
+                                    .select(OPEN_HOURS.RESTAURANT_ID)
+                                    .from(OPEN_HOURS)
+                                    .where(OPEN_HOURS.DAY_OF_WEEK.eq(dayOfWeekString)
+                                            .and(OPEN_HOURS.START_TIME_MINUTE_OF_DAY.le(minuteOfDay)
+                                                    .and(OPEN_HOURS.END_TIME_MINUTE_OF_DAY.ge(minuteOfDay))))
+
+                                    .or(OPEN_HOURS.DAY_OF_WEEK.eq(previousDayOfWeekString)
+                                            .and(OPEN_HOURS.START_TIME_MINUTE_OF_DAY.ge(OPEN_HOURS.END_TIME_MINUTE_OF_DAY))
+                                            .and(OPEN_HOURS.END_TIME_MINUTE_OF_DAY.gt(minuteOfDay))
+                                            .and(minuteOfDay < span))))
+                    .fetchInto(RestaurantsRecord.class);
         });
     }
 
     /**
-     *
-     *  TODO: Implement me
-     *
-     *  NOTE:  This method should have the same logic as SQLRestaurantService.getRestaurantsWithMenuOfSizeGreaterThanOrEqualTo, but should use the Jooq SQL DSL:
-     *
-     *  https://www.jooq.org/doc/3.13/manual-single-page/#select-statement
-     *
+     * TODO: Implement me
+     * <p>
+     * NOTE:  This method should have the same logic as SQLRestaurantService.getRestaurantsWithMenuOfSizeGreaterThanOrEqualTo, but should use the Jooq SQL DSL:
+     * <p>
+     * https://www.jooq.org/doc/3.13/manual-single-page/#select-statement
      */
     public List<RestaurantsRecord> getRestaurantsWithMenuOfSizeGreaterThanOrEqualTo(final Integer menuSize) throws SQLException {
         return withDSLContext(create -> {
             return create
-                    .selectFrom(RESTAURANTS)
-                    .fetch();
+                    .select(RESTAURANTS.ID, RESTAURANTS.NAME)
+                    .from(RESTAURANTS)
+                    .where(RESTAURANTS.ID
+                            .in(create.select(MENU_ITEMS.RESTAURANT_ID)
+                                    .from(MENU_ITEMS)
+                                    .groupBy(MENU_ITEMS.RESTAURANT_ID)
+                                    .having(count().ge(menuSize))
+                            )
+                    )
+                    .fetchInto(RestaurantsRecord.class);
         });
     }
 
@@ -72,7 +95,7 @@ public class JooqRestaurantService {
     }
 
     // NOTE: Ideally we should use the maven plugin to generate the Jooq classes
-    public static void main (final String [] args) throws Exception {
+    public static void main(final String[] args) throws Exception {
         final SQLRestaurantService sqlRestaurantService = new SQLRestaurantService();
         sqlRestaurantService.initializeDatabase();
 
